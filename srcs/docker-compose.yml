@@ -1,0 +1,99 @@
+# x-common-settingsは共通の設定を一箇所にまとめるために使われる
+x-common-settings: &common-settings
+# コンテナが停止した場合に自動的にコンテナを再起動するように指定する
+  restart: always
+# コンテナが接続するネットワークをinceptionという名前のネットワークに指定する
+# bridge ドライバを使用することで、Docker が管理するプライベート内部ネットワークを形成し、外部からは隔離される
+  networks:
+    - inception
+# コンテナ内で利用する環境変数を .env ファイルから読み込むように指定する
+#.env ファイルには環境変数がキーと値のペアで定義され、このファイルを指定することで、複数のコンテナで共通の環境設定を容易に管理できます
+  env_file: .env
+
+services:
+  mariadb:
+# <<: *common-settings を使って共通設定を適用しています。
+    <<: *common-settings
+# コンテナの名前をmariadbに指定
+    container_name: mariadb
+# imageの名前をmariadbに指定
+    image: mariadb
+# Dockerfileの場所を指定
+    build: ./requirements/mariadb/
+# ホストの sql ボリューム(HOME/data/sql)をコンテナの /var/lib/mysql にマウントする
+    volumes:
+      - sql:/var/lib/mysql
+
+  nginx:
+    <<: *common-settings
+# コンテナの名前をnginxに指定
+    container_name: nginx
+# imageの名前をnginxに指定
+    image: nginx
+    build:
+# Dockerfileの場所を指定
+      context: ./requirements/nginx/
+# Dockerfileで環境変数を使用するために.envの環境変数を読み込む
+      args:
+        COUNTRY: ${COUNTRY}
+        STATE: ${STATE}
+        LOCATION: ${LOCATION}
+        ORGANIZATION: ${ORGANIZATION}
+        UNIT: ${UNIT}
+        DOMAIN_NAME: ${DOMAIN_NAME}
+        USER_NAME: ${WP_USER}
+        KEY: ${KEY}
+        OUT: ${OUT}
+# nginxコンテナはWordPressコンテナが起動した後に起動する
+    depends_on:
+      - wordpress
+# WordPressのデータをnginxコンテナで利用できるようにする
+    volumes:
+      - wordpress:/var/www/html
+# "443:443": ホストの443ポートをコンテナの443ポートに割り当てる
+    ports:
+      - "443:443"
+
+  wordpress:
+    <<: *common-settings
+# コンテナの名前をwordpressに指定
+    container_name: wordpress
+# imageの名前をwordpressに指定
+    image: wordpress
+# Dockerfileの場所を指定
+    build: ./requirements/wordpress/
+# wordpressコンテナはmariadbコンテナが起動した後に起動する
+    depends_on:
+      - mariadb
+# ホストの wordpress ボリューム(HOME/data/wordpress)をコンテナの /var/www/html にマウントする
+    volumes:
+    - wordpress:/var/www/html
+
+# name オプションの使用
+# name オプションを networks セクションで使用する目的は、このデフォルトの命名規則をオーバーライドして、任意のカスタム名をネットワークに割り当てることです。
+# この設定を行うことで、ネットワーク名をシンプルに保つことができ、また異なるプロジェクト間でネットワーク名が衝突するのを避けることが可能になります。
+networks:
+  inception:
+# nameを使い、オーバーライドすることでnetwork名の先頭にsrcs_とつくのを防ぐ
+    name: inception
+# ネットワークのドライバーにbrigeを使用する。bridgeは同じnetworkに所属するコンテナ間で通信を可能にし、外部ネットワークとの接続も提供します
+    driver: bridge
+
+volumes:
+  sql:
+# データの永続化のためにホストマシン上にデータを保存できるlocalドライバーを使用する
+    driver: local
+    driver_opts:
+# noneによって、特定のファイルシステムではなく、デフォルトの設定をそのまま使う
+      type: 'none'
+# o: 'bind': これはバインドマウントを作成するためのオプションです。
+# バインドマウントを使用すると、ホストマシンのディレクトリにコンテナを繋げることができる　
+      o: 'bind'
+# バインドマウントするホストマシンのディレクトリを指定
+      device: ${HOME}/data/sql
+  wordpress:
+    driver: local
+    driver_opts:
+      type: 'none'
+      o: 'bind'
+      device: ${HOME}/data/wordpress
