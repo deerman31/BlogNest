@@ -2,7 +2,7 @@
 
 # 追加するIPアドレスとドメイン名
 IP_ADDRESS="127.0.0.1"
-DOMAIN_NAME="ykusano.42.fr"
+DOMAIN_NAME="bill.42.fr"
 
 # /etc/hostsにエントリが存在するか確認
 if grep -q "$IP_ADDRESS $DOMAIN_NAME" /etc/hosts; then
